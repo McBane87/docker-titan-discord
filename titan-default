@@ -1,0 +1,19 @@
+# User and Group ID you want to use for the user "titan"
+# Please be sure to don't use any id, which is already in use inside the container
+export TITAN_UID=500
+export TITAN_GID=500
+
+# User and Group ID you want to use for the user "postgres"
+# Please be sure to don't use any id, which is already in use inside the container
+export POSTGRES_UID=501
+export POSTGRES_GID=501
+
+# User and Group ID you want to use for the user "redis"
+# Please be sure to don't use any id, which is already in use inside the container
+export REDIS_UID=502
+export REDIS_GID=502
+
+# Commandline options for the Web-Server
+# Ports less than 1025 are not possible, because we run not as root
+export GUNICORN_CMD_ARGS="-b 0.0.0.0:8080  -w 5 --disable-redirect-access-to-syslog --access-logfile /var/log/titan/web_access.log --error-logfile /var/log/titan/web_error.log --certfile=/etc/titan/ssl/selfsigned.crt --keyfile=/etc/titan/ssl/selfsigned.key"
+
