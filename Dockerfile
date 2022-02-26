@@ -88,6 +88,7 @@ RUN apt-get update && \
 RUN apt-get update && \
 	apt-get install -y git  && \
 	cd /opt && git clone https://github.com/TitanEmbeds/Titan.git titan && \
+	cd titan && git reset --hard 8d7bc145fda6e9cb0b2cfe468f48663815d0ff8c && \
 	apt-get purge -y git && \
 	apt-get autoremove -y && \
 	apt-get clean && apt-get autoclean && \
@@ -102,8 +103,9 @@ RUN apt-get update && \
 
 RUN apt-get update && \
 	apt-get install -y python3 python3-pip python3-six python3-psycopg2 rustc libssl-dev && \
-	pip3 install -r /opt/titan/requirements.txt && \
-	pip3 install alembic 'eventlet<0.30' && \
+	python3 -m pip install --upgrade pip && \
+	python3 -m pip install -r /opt/titan/requirements.txt && \
+	python3 -m pip install alembic 'eventlet<0.30' && \
 	rm -rf /root/.cache && \
 	apt-get purge -y python3-pip rustc libssl-dev && \
 	apt-get autoremove -y && \
