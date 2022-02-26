@@ -1,5 +1,8 @@
 #! /usr/bin/env bash
 
+rm -rf /run/*
+rm -rf /var/run/*
+
 if [[ -f /etc/titan/titan.env ]]; then
 	source /etc/titan/titan.env
 else

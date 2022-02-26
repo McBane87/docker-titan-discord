@@ -1,0 +1,12 @@
+#!/bin/bash
+
+PG_VER=13
+
+/etc/wait-pre-start.sh 
+
+rm -rf /var/run/postgresql
+install -d -m 2775 -o postgres -g postgres /var/run/postgresql /var/run/postgresql/${PG_VER}-main.pg_stat_tmp
+
+exec su -s /bin/bash \
+	-g postgres -G ssl-cert postgres \
+	-c "exec /usr/lib/postgresql/${PG_VER}/bin/postgres -D /var/lib/postgresql/${PG_VER}/main -c config_file=/etc/postgresql/${PG_VER}/main/postgresql.conf"

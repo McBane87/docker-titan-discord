@@ -1,0 +1,7 @@
+#!/bin/bash
+
+/etc/wait-pre-start.sh
+
+exec su -s /bin/bash \
+	-g redis redis \
+	-c "exec /usr/bin/redis-server /etc/redis/redis.conf"

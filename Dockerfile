@@ -1,4 +1,4 @@
-FROM debian:buster-slim
+FROM debian:bullseye-slim
 
 ENV LC_ALL C
 ENV DEBIAN_FRONTEND noninteractive
@@ -6,26 +6,14 @@ ENV TZ Europe/London
 
 RUN ln -sf /bin/bash /bin/sh
 
-# Systemd implementation ###############################################################
+# Supervisor implementation ###############################################################
 
 ENV container docker
 
 RUN apt-get update \
-    && apt-get install -y tzdata systemd cron logrotate rsyslog bash-completion rsync \
+    && apt-get install -y tzdata cron logrotate supervisor bash-completion rsync \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-	
-RUN rm -f /lib/systemd/system/multi-user.target.wants/* \
-    /etc/systemd/system/*.wants/* \
-    /lib/systemd/system/local-fs.target.wants/* \
-    /lib/systemd/system/sockets.target.wants/*udev* \
-    /lib/systemd/system/sockets.target.wants/*initctl* \
-    /lib/systemd/system/sysinit.target.wants/systemd-tmpfiles-setup* \
-    /lib/systemd/system/systemd-update-utmp*
-	
-RUN systemctl enable rsyslog \
-	&& systemctl enable cron \
-	&& systemctl disable exim4
 
 # Careful! Docker remove Lines with leading '#', even if they are inside an echo statement!	
 RUN mkdir /etc/pre.systemd.d && echo -e "#!/bin/bash\n\
@@ -40,27 +28,33 @@ if [ -d /etc/pre.systemd.d ]; then\n\
     done\n\
 fi\n\
 \n\
-echo \"[\$(date +'%Y-%m-%d %H:%I:%S')] Starting Systemd...\"\n\
-exec /lib/systemd/systemd\
-" > /sbin/init-systemd.sh && chmod 700 /sbin/init-systemd.sh
+/etc/rc.local &\n\
+\n\
+echo \"[\$(date +'%Y-%m-%d %H:%I:%S')] Starting Supervisord...\"\n\
+exec /usr/bin/supervisord -c /etc/supervisor/supervisord.conf -n\
+" > /sbin/init.sh && chmod 700 /sbin/init.sh
 
-STOPSIGNAL SIGRTMIN+3
-VOLUME [ "/sys/fs/cgroup" ]
-CMD ["/sbin/init-systemd.sh"]
+CMD ["/sbin/init.sh"]
 
-#####################################################################################
-### docker run --tmpfs /run --tmpfs /run/lock -v /sys/fs/cgroup:/sys/fs/cgroup:ro ###
-#####################################################################################
+COPY sv-cron.conf /etc/supervisor/conf.d/cron.conf
+COPY sv-pgsql.conf /etc/supervisor/conf.d/pgsql.conf
+COPY sv-redis.conf /etc/supervisor/conf.d/redis.conf
+COPY sv-titan.conf /etc/supervisor/conf.d/titan.conf
+
+RUN mkdir /etc/supervisor/init.d
+COPY sv-pgsql.init /etc/supervisor/init.d/pgsql
+COPY sv-redis.init /etc/supervisor/init.d/redis
+COPY sv-titan.init /etc/supervisor/init.d/titan
 
 # Locale ##############################################################################
 
 RUN apt-get update && \
-	apt-get install -y locales && \
-	localedef -i en_US -c -f UTF-8 -A /usr/share/locale/locale.alias en_US.UTF-8 && \
+	nice -n19 apt-get install -y locales && \
+	localedef -i en_GB -c -f UTF-8 -A /usr/share/locale/locale.alias en_GB.UTF-8 && \
 	apt-get clean && apt-get autoclean && \
-	rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+	rm -rf /var/lib/apt/lists/*
 	
-ENV LANG en_US.utf8
+ENV LANG en_GB.UTF-8
 
 # PreStart-Script #######################################################################
 
@@ -88,6 +82,7 @@ RUN apt-get update && \
 RUN apt-get update && \
 	apt-get install -y git  && \
 	cd /opt && git clone https://github.com/TitanEmbeds/Titan.git titan && \
+	cd titan && git reset --hard 8d7bc145fda6e9cb0b2cfe468f48663815d0ff8c && \
 	apt-get purge -y git && \
 	apt-get autoremove -y && \
 	apt-get clean && apt-get autoclean && \
@@ -101,11 +96,11 @@ RUN apt-get update && \
 # once we uninstall python3-pip. So we have to install them explicitly.
 
 RUN apt-get update && \
-	apt-get install -y python3 python3-pip python3-six python3-psycopg2 rustc libssl-dev && \
+	apt-get install -y python3 python3-pip python3-six python3-psycopg2 && \
 	pip3 install -r /opt/titan/requirements.txt && \
 	pip3 install alembic 'eventlet<0.30' && \
 	rm -rf /root/.cache && \
-	apt-get purge -y python3-pip rustc libssl-dev && \
+	apt-get purge -y python3-pip && \
 	apt-get autoremove -y && \
 	apt-get clean && apt-get autoclean && \
 	rm -rf /var/lib/apt/lists/ /tmp/* /var/tmp/*
@@ -118,25 +113,15 @@ RUN apt-get update && \
 	apt-get install -y postgresql redis && \
 	apt-get clean && apt-get autoclean && \
 	rm -rf /var/lib/apt/lists/ && \
-	mv /var/lib/postgresql/11/main /var/lib/pgsql && \
-	ln -s /var/lib/pgsql /var/lib/postgresql/11/main && \
-	systemctl enable postgresql && \
-	systemctl enable redis-server && \
+	sed -i 's/^daemonize yes/daemonize no/g' /etc/redis/redis.conf && \
+	mv /var/lib/postgresql/13/main /var/lib/pgsql && \
+	ln -s /var/lib/pgsql /var/lib/postgresql/13/main && \
 	mkdir /etc/titan && \
 	cat /opt/titan/webapp/alembic.example.ini > /etc/titan/alembic.ini && \
 	sed -i "s;^\s*sqlalchemy.url =.*$;sqlalchemy.url = postgresql://titanbot:{{psqlpw}}@localhost/titan;g" /etc/titan/alembic.ini && \
 	ln -s /etc/titan/alembic.ini /opt/titan/webapp/ && \
-	mkdir -p /etc/systemd/system/postgresql.service.d && \
-	echo -e "[Service]\nExecStartPre=/etc/wait-pre-start.sh\nExecStartPost=/etc/post-pgsql.sh" > /etc/systemd/system/postgresql.service.d/override.conf && \
-	mkdir -p /etc/systemd/system/postgresql@.service.d && \
-	echo -e "[Service]\nExecStartPre=/etc/wait-pre-start.sh\nExecStartPost=/etc/post-pgsql.sh" > /etc/systemd/system/postgresql@.service.d/override.conf && \
-	mkdir -p /etc/systemd/system/redis-server.service.d && \
-	echo -e "[Service]\nExecStartPre=/etc/wait-pre-start.sh" > /etc/systemd/system/redis-server.service.d/override.conf && \
 	chmod 775 /etc/post-pgsql.sh && \
 	rm -rf /tmp/* /var/tmp/*
-
-RUN mv /lib/systemd/system/redis-server.service /lib/systemd/system/redis-server.service.orig
-COPY redis-for-docker.service /lib/systemd/system/redis-server.service
 
 # Titan User ###########################################################################
 
@@ -146,7 +131,6 @@ RUN useradd -s /bin/bash -m titan
 
 COPY init_web.sh /opt/titan/init_web.sh
 COPY titan-default /etc/titan/titan.env
-COPY titan-webapp.service /etc/systemd/system/titan-webapp.service
 COPY ssl-selfsign.conf /etc/ssl/ssl-selfsign.conf
 COPY titan-webapp-config.py /etc/titan/webapp-config.py
 
@@ -155,7 +139,6 @@ RUN apt-get update && \
 	apt-get clean && apt-get autoclean && \
 	rm -rf /var/lib/apt/lists/ && \
 	chmod 755 /opt/titan/init_web.sh && \
-	systemctl enable titan-webapp && \
 	echo "from titanembeds.app import app" > /opt/titan/webapp/run_gc.py && \
 	ln -sf /etc/titan/webapp-config.py /opt/titan/webapp/config.py && \
 	rm -rf /tmp/* /var/tmp/*
@@ -163,11 +146,9 @@ RUN apt-get update && \
 # Titan-Bot ############################################################################
 
 COPY init_bot.sh /opt/titan/init_bot.sh
-COPY titan-discord.service /etc/systemd/system/titan-discord.service
 COPY titan-bot-config.py /etc/titan/discordbot-config.py
 
 RUN chmod 755 /opt/titan/init_bot.sh && \
-	systemctl enable titan-discord && \
 	ln -sf /etc/titan/discordbot-config.py /opt/titan/discordbot/config.py && \
 	if [[ ! -d /var/log/titan ]]; then \
 		mkdir /var/log/titan && \

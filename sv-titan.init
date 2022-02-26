@@ -1,0 +1,21 @@
+#!/bin/bash
+
+SCRIPT="/opt/titan/init_web.sh"
+[[ $1 == 'bot' ]] && \
+	SCRIPT="/opt/titan/init_bot.sh"
+
+/etc/wait-pre-start.sh
+
+mkdir /var/log/titan 2>/dev/null
+chown --no-dereference -R titan:titan /var/log/titan
+chown --no-dereference :titan /opt/titan/discordbot
+chown --no-dereference titan:titan /opt/titan/discordbot/titanbot.log
+chmod 775 /opt/titan/discordbot
+
+while [[ -z \"`netstat -tln | grep 5432`\" || -z \"`netstat -tln | grep 6380`\" ]]; do 
+	sleep 1
+done
+
+exec su -s/bin/bash \
+	-g titan titan \
+	-c "exec ${SCRIPT}"
