@@ -1,4 +1,4 @@
-FROM debian:bullseye-slim
+FROM debian:buster-slim
 
 ENV LC_ALL C
 ENV DEBIAN_FRONTEND noninteractive
@@ -97,8 +97,9 @@ RUN apt-get update && \
 
 RUN apt-get update && \
 	apt-get install -y python3 python3-pip python3-six python3-psycopg2 && \
-	pip3 install -r /opt/titan/requirements.txt && \
-	pip3 install alembic 'eventlet<0.30' && \
+	python3 -m pip install --upgrade pip && \
+	python3 -m pip install -r /opt/titan/requirements.txt && \
+	python3 -m pip install alembic 'eventlet<0.30' && \
 	rm -rf /root/.cache && \
 	apt-get purge -y python3-pip && \
 	apt-get autoremove -y && \
@@ -114,8 +115,8 @@ RUN apt-get update && \
 	apt-get clean && apt-get autoclean && \
 	rm -rf /var/lib/apt/lists/ && \
 	sed -i 's/^daemonize yes/daemonize no/g' /etc/redis/redis.conf && \
-	mv /var/lib/postgresql/13/main /var/lib/pgsql && \
-	ln -s /var/lib/pgsql /var/lib/postgresql/13/main && \
+	mv /var/lib/postgresql/11/main /var/lib/pgsql && \
+	ln -s /var/lib/pgsql /var/lib/postgresql/11/main && \
 	mkdir /etc/titan && \
 	cat /opt/titan/webapp/alembic.example.ini > /etc/titan/alembic.ini && \
 	sed -i "s;^\s*sqlalchemy.url =.*$;sqlalchemy.url = postgresql://titanbot:{{psqlpw}}@localhost/titan;g" /etc/titan/alembic.ini && \

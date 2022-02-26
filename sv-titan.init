@@ -12,6 +12,8 @@ chown --no-dereference :titan /opt/titan/discordbot
 chown --no-dereference titan:titan /opt/titan/discordbot/titanbot.log
 chmod 775 /opt/titan/discordbot
 
+install -d -m 2775 -o titan -g titan /run/titan
+
 while [[ -z \"`netstat -tln | grep 5432`\" || -z \"`netstat -tln | grep 6380`\" ]]; do 
 	sleep 1
 done

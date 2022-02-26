@@ -1,6 +1,6 @@
 #!/bin/bash
 
-PG_VER=13
+PG_VER=11
 
 /etc/wait-pre-start.sh 
 
